@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Price Comparer</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
+</head>
+
+<body>
+  <div class="container">
+    <h1>AI Powered Smart Shopping</h1>
+    <p class="subtitle">Find the best deals and get AI recommendations instantly</p>
+
+    <div class="search-box">
+      <input type="text" id="productInput" placeholder="Enter product name...">
+      <button onclick="fetchProductData()">Search</button>
+    </div>
+
+    <div id="loader" class="loader" style="display: none;"></div>
+    <div id="recommendation" class="recommendation" style="display: none;"></div>
+
+    <div id="predictionSection" class="prediction-section" style="display: none;">
+      <h2>Price Prediction</h2>
+      <div id="prediction" class="prediction-box"></div>
+    </div>
+
+    <div id="productGrid" class="grid-container"></div>
+  </div>
+
+  <script>
+    async function fetchProductData() {
+      const query = document.getElementById("productInput").value;
+      if (!query) return alert("Please enter a product name!");
+
+      document.getElementById("loader").style.display = "block";
+      document.getElementById("recommendation").style.display = "none";
+      document.getElementById("predictionSection").style.display = "none";
+      document.getElementById("productGrid").innerHTML = "";
+
+      try {
+        const response = await fetch("http://127.0.0.1:5000/scrape", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("✅ API Response:", data);
+
+        document.getElementById("loader").style.display = "none";
+
+        // Find best buy from displayed products (Flipkart, Amazon, eBay only)
+const numericProducts = data.products
+  .filter(p => p.price || p.Price)
+  .map(p => {
+    const priceStr = (p.Price || p.price).replace(/[₹$,]/g, "").split(" ")[0];
+    const numericPrice = parseFloat(priceStr);
+    return { ...p, numericPrice };
+  })
+  .filter(p => !isNaN(p.numericPrice));
+
+// Sort giving priority: Amazon > Flipkart > eBay
+const prioritized = numericProducts.sort((a, b) => {
+  const platformOrder = { Amazon: 1, Flipkart: 2, eBay: 3 };
+  if (a.numericPrice === b.numericPrice) {
+    return (platformOrder[a.Source || a.source] || 4) - (platformOrder[b.Source || b.source] || 4);
+  }
+  return a.numericPrice - b.numericPrice;
+});
+
+const best = prioritized[0];
+const reco = document.getElementById("recommendation");
+if (best) {
+  reco.innerText = `Best Buy: ${best["Product Name"] || best.name} — ${best.Price || best.price} (${best.Source || best.source})`;
+} else {
+  reco.innerText = "No valid prices found to recommend.";
+}
+reco.style.display = "block";
+
+        const predBox = document.getElementById("prediction");
+        predBox.innerHTML = `
+          <p><strong>Predicted Price:</strong> ${data.prediction.predicted_price}</p>
+          <p><strong>Suggestion:</strong> ${data.prediction.buy_decision}</p>
+        `;
+        document.getElementById("predictionSection").style.display = "block";
+
+        const grid = document.getElementById("productGrid");
+        data.products.forEach((product) => {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `
+    <a href="${product.url}" target="_blank" style="text-decoration: none; color: inherit;">
+      <img src="${product.Image || product.image}" alt="Product Image" class="product-img" />
+      <h3>${product["Product Name"] || product.name}</h3>
+      <p class="price">${product.Price || product.price}</p>
+      <p class="source">From: ${product.Source || product.source}</p>
+    </a>
+  `;
+  grid.appendChild(card);
+});
+
+      } catch (err) {
+        document.getElementById("loader").style.display = "none";
+        alert("❌ Failed to fetch product data. Check console for errors.");
+        console.error("❌ Error in frontend fetch:", err);
+      }
+    }
+  </script>
+</body>
+
+</html>
