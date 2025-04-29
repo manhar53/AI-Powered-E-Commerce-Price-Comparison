@@ -1,7 +1,7 @@
 import requests
 
 def scrape_amazon(search_query):
-    api_key = "6B7553E9222447A1906796759DE719D7"
+    api_key = ""
     url = "https://api.rainforestapi.com/request"
     
     params = {
